@@ -6,6 +6,26 @@ It's a very simple and powerful package wrapper over the
 standard `http` package for making requests in an easier and
 less verbose way.
 
+## The interface
+
+Krest aims to be simple and so its interface is very simple and
+we don't plan on adding new functions to it if we can avoid it:
+
+```golang
+// Provider describes the functions necessary to do all types of REST
+// requests.
+//
+// It returns error if it was not possible to complete the request
+// or if the status code of the request was not in the range 200-299.
+type Provider interface {
+	Get(ctx context.Context, url string, data RequestData) (resp Response, err error)
+	Post(ctx context.Context, url string, data RequestData) (resp Response, err error)
+	Put(ctx context.Context, url string, data RequestData) (resp Response, err error)
+	Patch(ctx context.Context, url string, data RequestData) (resp Response, err error)
+	Delete(ctx context.Context, url string, data RequestData) (resp Response, err error)
+}
+```
+
 ## Sample requests
 
 Simple requests using krest look like this:

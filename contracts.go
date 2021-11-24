@@ -7,14 +7,11 @@ import (
 	"time"
 )
 
-// Provider provides the functions to perform
-// REST requests automatically marshalling the input body as JSON.
+// Provider describes the functions necessary to do all types of REST
+// requests.
 //
-// It returns error only if it was not possible to complete the request
-// either because of a marshal error or a network error.
-//
-// Otherwise the statusCode should be used to check if the request
-// was processed successfully.
+// It returns error if it was not possible to complete the request
+// or if the status code of the request was not in the range 200-299.
 type Provider interface {
 	Get(ctx context.Context, url string, data RequestData) (resp Response, err error)
 	Post(ctx context.Context, url string, data RequestData) (resp Response, err error)
