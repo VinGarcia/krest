@@ -31,45 +31,41 @@ func New(timeout time.Duration) Client {
 
 // Get will make a GET request to the input URL
 // and return the results
-func (c Client) Get(url string, data RequestData) (Response, error) {
-	return c.makeRequest("GET", url, data)
+func (c Client) Get(ctx context.Context, url string, data RequestData) (Response, error) {
+	return c.makeRequest(ctx, "GET", url, data)
 }
 
 // Post will make a POST request to the input URL
 // and return the results
-func (c Client) Post(url string, data RequestData) (Response, error) {
-	return c.makeRequest("POST", url, data)
+func (c Client) Post(ctx context.Context, url string, data RequestData) (Response, error) {
+	return c.makeRequest(ctx, "POST", url, data)
 }
 
 // Put will make a PUT request to the input URL
 // and return the results
-func (c Client) Put(url string, data RequestData) (Response, error) {
-	return c.makeRequest("PUT", url, data)
+func (c Client) Put(ctx context.Context, url string, data RequestData) (Response, error) {
+	return c.makeRequest(ctx, "PUT", url, data)
 }
 
 // Patch will make a PATCH request to the input URL
 // and return the results
-func (c Client) Patch(url string, data RequestData) (Response, error) {
-	return c.makeRequest("PATCH", url, data)
+func (c Client) Patch(ctx context.Context, url string, data RequestData) (Response, error) {
+	return c.makeRequest(ctx, "PATCH", url, data)
 }
 
 // Delete will make a DELETE request to the input URL
 // and return the results
-func (c Client) Delete(url string, data RequestData) (Response, error) {
-	return c.makeRequest("DELETE", url, data)
+func (c Client) Delete(ctx context.Context, url string, data RequestData) (Response, error) {
+	return c.makeRequest(ctx, "DELETE", url, data)
 }
 
 func (c Client) makeRequest(
+	ctx context.Context,
 	method string,
 	url string,
 	data RequestData,
 ) (_ Response, err error) {
 	data.SetDefaultsIfNecessary()
-
-	ctx := data.Context
-	if ctx == nil {
-		ctx = context.TODO()
-	}
 
 	var requestBody io.Reader
 	switch body := data.Body.(type) {

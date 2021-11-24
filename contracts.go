@@ -16,11 +16,11 @@ import (
 // Otherwise the statusCode should be used to check if the request
 // was processed successfully.
 type Provider interface {
-	Get(url string, data RequestData) (resp Response, err error)
-	Post(url string, data RequestData) (resp Response, err error)
-	Put(url string, data RequestData) (resp Response, err error)
-	Patch(url string, data RequestData) (resp Response, err error)
-	Delete(url string, data RequestData) (resp Response, err error)
+	Get(ctx context.Context, url string, data RequestData) (resp Response, err error)
+	Post(ctx context.Context, url string, data RequestData) (resp Response, err error)
+	Put(ctx context.Context, url string, data RequestData) (resp Response, err error)
+	Patch(ctx context.Context, url string, data RequestData) (resp Response, err error)
+	Delete(ctx context.Context, url string, data RequestData) (resp Response, err error)
 }
 
 // RequestData describes the optional arguments for all
@@ -31,9 +31,6 @@ type RequestData struct {
 	Body interface{}
 
 	Headers map[string]string
-
-	// Optional
-	Context context.Context
 
 	// Set this option to true if you
 	// expect to receive big bodies of data
