@@ -1,16 +1,3 @@
-# Welcome to KRest
-
-KRest stands for Keep it simple REST Package.
-
-It's a very simple and powerful package wrapper over the
-standard `http` package for making requests in an easier and
-less verbose way.
-
-## Sample requests
-
-Simple requests using krest look like this:
-
-```golang
 package examples
 
 import (
@@ -115,4 +102,3 @@ func sendUser(ctx context.Context, rest krest.Provider, user User) error {
 
 	return nil
 }
-```
