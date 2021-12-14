@@ -86,6 +86,9 @@ type Response struct {
 	StatusCode int
 }
 
+// DefaultRetryRule is the default retry rule that will retry (i.e. return true)
+// if the request ends with an error, if the status is > 500
+// or if the status is one of: StatusLocked, StatusTooEarly and StatusTooManyRequests.
 func DefaultRetryRule(resp *http.Response, err error) bool {
 	retriableStatus := map[int]bool{
 		http.StatusLocked:          true,

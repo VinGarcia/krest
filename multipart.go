@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+// MultipartData is a helper type for storing the
+// multipart data payload in a practical structure.
 type MultipartData map[string]io.Reader
 
 type multipartFile struct {
@@ -21,6 +23,7 @@ type multipartItem struct {
 	contentType string
 }
 
+// MultipartFile is a helper for encoding files as a part of the multipart data payload
 func MultipartFile(data io.Reader, name string) io.Reader {
 	return multipartFile{
 		Reader: data,
@@ -28,6 +31,8 @@ func MultipartFile(data io.Reader, name string) io.Reader {
 	}
 }
 
+// MultipartItem is a helper for encoding items with specific
+// content-types as a part of the multipart data payload
 func MultipartItem(data io.Reader, contentType string) io.Reader {
 	return multipartItem{
 		Reader:      data,
@@ -72,6 +77,7 @@ func newMultipartStream(data MultipartData) (_ *multipartStream, contentType str
 	return &stream, multipartWriter.FormDataContentType(), nil
 }
 
+// Read implements the io.Reader interface
 func (m *multipartStream) Read(p []byte) (n int, err error) {
 	if m.buf.Len() == 0 {
 		err := m.loadFormBuffer(m.buf, int64(len(p)))

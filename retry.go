@@ -35,7 +35,7 @@ var retryRand = rand.New(rand.NewSource(time.Now().Unix()))
 
 var randMillis = DefaultRandMillis
 
-// Calculates retry random factor based on the following guide:
+// DefaultRandMillis calculates retry random factor based on the following guide:
 //
 // https://cloud.google.com/iot/docs/how-tos/exponential-backoff
 //

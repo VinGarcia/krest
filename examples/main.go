@@ -11,12 +11,14 @@ import (
 	"github.com/vingarcia/krest"
 )
 
+// User ...
 type User struct {
 	Name    string  `json:"name"`
 	Age     int     `json:"age"`
 	Address Address `json:"address"`
 }
 
+// Address ...
 type Address struct {
 	City    string `json:"city"`
 	Country string `json:"country"`
