@@ -10,11 +10,6 @@ import (
 // starting from `baseDelay` and performing at most `maxRetries`
 //
 // A retry is attempted only when the callback returns true.
-//
-// This implementation is based on the following guide:
-//
-// https://gitlab.wearelayer.com/V3/openbanking/-/merge_requests/7
-//
 func Retry(ctx context.Context, baseDelay time.Duration, maxDelay time.Duration, maxRetries int, fn func() bool) {
 	for i := 0; i < maxRetries; i, baseDelay = i+1, minDuration(baseDelay*2+randMillis(), maxDelay) {
 		shouldRetry := fn()
