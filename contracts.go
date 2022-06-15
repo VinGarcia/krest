@@ -97,3 +97,20 @@ func DefaultRetryRule(resp *http.Response, err error) bool {
 	}
 	return err != nil || retriableStatus[resp.StatusCode] || resp.StatusCode > 500
 }
+
+// Middleware describes the expected format for this package middlewares
+type Middleware func(
+	ctx context.Context,
+	method string,
+	url string,
+	data RequestData,
+	next NextMiddleware,
+) (Response, error)
+
+// NextMiddleware describes the signature of the `next` middleware function
+type NextMiddleware func(
+	ctx context.Context,
+	method string,
+	url string,
+	data RequestData,
+) (Response, error)

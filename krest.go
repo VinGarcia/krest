@@ -17,46 +17,82 @@ import (
 // but the response is returned in Bytes, since not all APIs follow
 // rest strictly.
 type Client struct {
-	http http.Client
+	http        http.Client
+	middlewares []Middleware
 }
 
 // New instantiates a new rest client
-func New(timeout time.Duration) Client {
+func New(timeout time.Duration, middlewares ...Middleware) Client {
 	return Client{
-		http.Client{
+		http: http.Client{
 			Timeout: timeout,
 		},
+		middlewares: middlewares,
 	}
+}
+
+// AddMiddleware adds one or more new middlewares to this instance
+func (c *Client) AddMiddleware(middlewares ...Middleware) {
+	c.middlewares = append(c.middlewares, middlewares...)
 }
 
 // Get will make a GET request to the input URL
 // and return the results
 func (c Client) Get(ctx context.Context, url string, data RequestData) (Response, error) {
-	return c.makeRequest(ctx, "GET", url, data)
+	return c.makeRequestWithMiddlewares(ctx, "GET", url, data)
 }
 
 // Post will make a POST request to the input URL
 // and return the results
 func (c Client) Post(ctx context.Context, url string, data RequestData) (Response, error) {
-	return c.makeRequest(ctx, "POST", url, data)
+	return c.makeRequestWithMiddlewares(ctx, "POST", url, data)
 }
 
 // Put will make a PUT request to the input URL
 // and return the results
 func (c Client) Put(ctx context.Context, url string, data RequestData) (Response, error) {
-	return c.makeRequest(ctx, "PUT", url, data)
+	return c.makeRequestWithMiddlewares(ctx, "PUT", url, data)
 }
 
 // Patch will make a PATCH request to the input URL
 // and return the results
 func (c Client) Patch(ctx context.Context, url string, data RequestData) (Response, error) {
-	return c.makeRequest(ctx, "PATCH", url, data)
+	return c.makeRequestWithMiddlewares(ctx, "PATCH", url, data)
 }
 
 // Delete will make a DELETE request to the input URL
 // and return the results
 func (c Client) Delete(ctx context.Context, url string, data RequestData) (Response, error) {
-	return c.makeRequest(ctx, "DELETE", url, data)
+	return c.makeRequestWithMiddlewares(ctx, "DELETE", url, data)
+}
+
+func (c Client) makeRequestWithMiddlewares(
+	ctx context.Context,
+	method string,
+	url string,
+	data RequestData,
+) (Response, error) {
+	var i = -1 // (It will be incremented to 0 on first use)
+
+	// Each time this next() function is called
+	// the next middleware is executed until there are no
+	// middlewares left, then we run makeRequest()
+	var nextMiddleware NextMiddleware
+	nextMiddleware = func(
+		ctx context.Context,
+		method string,
+		url string,
+		data RequestData,
+	) (Response, error) {
+		i++
+		if i < len(c.middlewares) {
+			return c.middlewares[i](ctx, method, url, data, nextMiddleware)
+		}
+
+		return c.makeRequest(ctx, method, url, data)
+	}
+
+	return nextMiddleware(ctx, method, url, data)
 }
 
 func (c Client) makeRequest(
