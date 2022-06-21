@@ -72,27 +72,25 @@ func (c Client) makeRequestWithMiddlewares(
 	url string,
 	data RequestData,
 ) (Response, error) {
-	var i = -1 // (It will be incremented to 0 on first use)
+	// Start from back to front where the last middleware is c.makeRequest:
+	middlewareChain := c.makeRequest
+	for i := len(c.middlewares) - 1; i >= 0; i-- {
 
-	// Each time this next() function is called
-	// the next middleware is executed until there are no
-	// middlewares left, then we run makeRequest()
-	var nextMiddleware NextMiddleware
-	nextMiddleware = func(
-		ctx context.Context,
-		method string,
-		url string,
-		data RequestData,
-	) (Response, error) {
-		i++
-		if i < len(c.middlewares) {
+		// Save a copy of the current head of the chain
+		// so the closure below works correctly:
+		var nextMiddleware = middlewareChain
+
+		middlewareChain = func(
+			ctx context.Context,
+			method string,
+			url string,
+			data RequestData,
+		) (Response, error) {
 			return c.middlewares[i](ctx, method, url, data, nextMiddleware)
 		}
-
-		return c.makeRequest(ctx, method, url, data)
 	}
 
-	return nextMiddleware(ctx, method, url, data)
+	return middlewareChain(ctx, method, url, data)
 }
 
 func (c Client) makeRequest(
