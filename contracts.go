@@ -74,6 +74,9 @@ func (r *RequestData) SetDefaultsIfNecessary() {
 	if r.RetryRule == nil {
 		r.RetryRule = DefaultRetryRule
 	}
+	if r.Headers == nil {
+		r.Headers = map[string]string{}
+	}
 }
 
 // Response describes the expected attributes

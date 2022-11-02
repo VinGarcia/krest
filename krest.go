@@ -115,12 +115,12 @@ func (c Client) makeRequest(
 		requestBody = bytes.NewReader(body)
 	case string:
 		requestBody = strings.NewReader(body)
-	case MultipartData:
+	case map[string]io.Reader:
 		if data.MaxRetries > 1 {
 			return Response{}, fmt.Errorf("can't retry a request whose body depends on io.Reader's!")
 		}
 
-		form, contentType, err := newMultipartStream(body)
+		form, contentType, err := newMultipartStream(MultipartData(body))
 		if err != nil {
 			return Response{}, fmt.Errorf("error building multipart data: %v", err)
 		}

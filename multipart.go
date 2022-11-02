@@ -11,7 +11,7 @@ import (
 
 // MultipartData is a helper type for storing the
 // multipart data payload in a practical structure.
-type MultipartData map[string]io.Reader
+type MultipartData = map[string]io.Reader
 
 type multipartFile struct {
 	io.Reader
