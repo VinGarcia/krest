@@ -17,16 +17,14 @@ import (
 // but the response is returned in Bytes, since not all APIs follow
 // rest strictly.
 type Client struct {
-	http        http.Client
+	timeout     time.Duration
 	middlewares []Middleware
 }
 
 // New instantiates a new rest client
 func New(timeout time.Duration, middlewares ...Middleware) Client {
 	return Client{
-		http: http.Client{
-			Timeout: timeout,
-		},
+		timeout:     timeout,
 		middlewares: middlewares,
 	}
 }
@@ -75,6 +73,7 @@ func (c Client) makeRequestWithMiddlewares(
 	// Start from back to front where the last middleware is c.makeRequest:
 	middlewareChain := c.makeRequest
 	for i := len(c.middlewares) - 1; i >= 0; i-- {
+		i := i
 
 		// Save a copy of the current head of the chain
 		// so the closure below works correctly:
@@ -143,21 +142,20 @@ func (c Client) makeRequest(
 		req.Header.Set(k, v)
 	}
 
+	httpClient := http.Client{
+		Timeout: c.timeout,
+		Transport: &http.Transport{
+			TLSClientConfig: data.TLSConfig,
+		},
+	}
+
 	var resp *http.Response
 	Retry(ctx, data.BaseRetryDelay, data.MaxRetryDelay, data.MaxRetries, func() bool {
-		resp, err = c.http.Do(req)
+		resp, err = httpClient.Do(req)
 		return data.RetryRule(resp, err)
 	})
 	if err != nil {
 		return Response{}, err
-	}
-
-	header := map[string]string{}
-	for k, v := range resp.Header {
-		if len(v) == 0 {
-			continue
-		}
-		header[k] = v[0]
 	}
 
 	isStatusSuccess := (resp.StatusCode >= 200 && resp.StatusCode < 300)
@@ -180,7 +178,7 @@ func (c Client) makeRequest(
 	return Response{
 		ReadCloser: bodyReader,
 		Body:       body,
-		Header:     header,
+		Header:     resp.Header,
 		StatusCode: resp.StatusCode,
 	}, err
 }

@@ -36,13 +36,20 @@ func AssertNoErr(t *testing.T, err error) {
 func AssertErrContains(t *testing.T, err error, substrs ...string) {
 	require.NotEqual(t, nil, err, "expected an error but the error is nil")
 
-	msg := err.Error()
+	AssertContains(t, err.Error(), substrs...)
+}
 
+// AssertContains will the input string contains
+// all the substrs specified on the substrs argument.
+//
+// In case any assertion fails it will fail the test with
+// an appropriate error message.
+func AssertContains(t *testing.T, str string, substrs ...string) {
 	for _, substr := range substrs {
 		require.True(t,
-			strings.Contains(msg, substr),
+			strings.Contains(str, substr),
 			"missing substring '%s' in error message: '%s'",
-			substr, msg,
+			substr, str,
 		)
 	}
 }

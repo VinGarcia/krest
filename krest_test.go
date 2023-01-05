@@ -1,0 +1,402 @@
+package krest
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	tt "github.com/vingarcia/krest/internal/testtools"
+)
+
+func TestNew(t *testing.T) {
+	type testCases struct {
+		description string
+		timeout     time.Duration
+	}
+
+	for _, test := range []testCases{
+		{
+			description: "With timeout",
+			timeout:     1 * time.Millisecond,
+		},
+	} {
+		t.Run(test.description, func(t *testing.T) {
+			client := New(test.timeout)
+			tt.AssertEqual(t, client.timeout, 1*time.Millisecond)
+		})
+	}
+}
+
+func TestKrestClient(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("public methods", func(t *testing.T) {
+
+		client := Client{}
+		type testCases struct {
+			description string
+			method      func(ctx context.Context, url string, data RequestData) (Response, error)
+
+			expectedErr        []string
+			expectedResp       string
+			expectedStatusCode int
+		}
+
+		for _, test := range []testCases{
+			{
+				description:        "GET: request is successful",
+				method:             client.Get,
+				expectedResp:       "Hello, client",
+				expectedStatusCode: http.StatusOK,
+			},
+			{
+				description:        "GET: bad request",
+				method:             client.Get,
+				expectedErr:        []string{"unexpected status code", "400", "Hello, client"},
+				expectedResp:       "Hello, client",
+				expectedStatusCode: http.StatusBadRequest,
+			},
+			{
+				description:        "POST: request is successful",
+				method:             client.Post,
+				expectedResp:       "Hello, client",
+				expectedStatusCode: http.StatusOK,
+			},
+			{
+				description:        "POST: bad request",
+				method:             client.Post,
+				expectedErr:        []string{"unexpected status code", "400", "Hello, client"},
+				expectedResp:       "Hello, client",
+				expectedStatusCode: http.StatusBadRequest,
+			},
+			{
+				description:        "PUT: request is successful",
+				method:             client.Put,
+				expectedResp:       "Hello, client",
+				expectedStatusCode: http.StatusOK,
+			},
+			{
+				description:        "PUT: bad request",
+				method:             client.Put,
+				expectedErr:        []string{"unexpected status code", "400", "Hello, client"},
+				expectedResp:       "Hello, client",
+				expectedStatusCode: http.StatusBadRequest,
+			},
+			{
+				description:        "PATCH: request is successful",
+				method:             client.Patch,
+				expectedResp:       "Hello, client",
+				expectedStatusCode: http.StatusOK,
+			},
+			{
+				description:        "PATCH: bad request",
+				method:             client.Patch,
+				expectedErr:        []string{"unexpected status code", "400", "Hello, client"},
+				expectedResp:       "Hello, client",
+				expectedStatusCode: http.StatusBadRequest,
+			},
+			{
+				description:        "DELETE: request is successful",
+				method:             client.Delete,
+				expectedResp:       "Hello, client",
+				expectedStatusCode: http.StatusOK,
+			},
+			{
+				description:        "DELETE: bad request",
+				method:             client.Delete,
+				expectedErr:        []string{"unexpected status code", "400", "Hello, client"},
+				expectedResp:       "Hello, client",
+				expectedStatusCode: http.StatusBadRequest,
+			},
+		} {
+			t.Run(test.description, func(t *testing.T) {
+				svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(test.expectedStatusCode)
+					fmt.Fprint(w, test.expectedResp)
+				}))
+				defer svr.Close()
+
+				client.timeout = 1 * time.Second
+
+				res, err := test.method(ctx, svr.URL, RequestData{
+					Headers: map[string]string{
+						"accept": "application/json",
+					},
+				})
+				if err != nil {
+					tt.AssertErrContains(t, err, test.expectedErr...)
+				}
+
+				body, err := io.ReadAll(res.ReadCloser)
+				tt.AssertNoErr(t, err)
+
+				tt.AssertEqual(t, string(body), test.expectedResp)
+				tt.AssertEqual(t, res.StatusCode, test.expectedStatusCode)
+			})
+		}
+	})
+
+	t.Run("makeRequest", func(t *testing.T) {
+		type testCases struct {
+			description        string
+			requestData        RequestData
+			responseStatusCode int
+			responseHeaders    map[string]string
+
+			expectedRequestHeaders  map[string]string
+			expectedResponseHeaders map[string]string
+			expectedRequestBody     string
+			expectedErr             []string
+		}
+
+		for _, test := range []testCases{
+			{
+				description:         "should work with a nil body",
+				requestData:         RequestData{},
+				expectedRequestBody: "",
+				responseStatusCode:  http.StatusOK,
+			},
+			{
+				description: "should work with bodies of type string",
+				requestData: RequestData{
+					Body: "Hello, client",
+				},
+				expectedRequestBody: "Hello, client",
+				responseStatusCode:  http.StatusOK,
+			},
+			{
+				description: "should work with of type []byte",
+				requestData: RequestData{
+					Body: []byte("Hello, client"),
+				},
+
+				expectedRequestBody: "Hello, client",
+				responseStatusCode:  http.StatusOK,
+			},
+			{
+				description: "should work with bodies of type io.Readers",
+				requestData: RequestData{
+					Body: strings.NewReader("Hello, client"),
+				},
+
+				expectedRequestBody: "Hello, client",
+				responseStatusCode:  http.StatusOK,
+			},
+			{
+				description: "should marshal bodies of type map as JSON",
+				requestData: RequestData{
+					Body: map[string]interface{}{
+						"fakeAttr": "fakeValue",
+					},
+				},
+
+				expectedRequestBody: `{"fakeAttr":"fakeValue"}`,
+				responseStatusCode:  http.StatusOK,
+			},
+			{
+				description: "should marshal bodies of type struct as JSON",
+				requestData: RequestData{
+					Body: struct {
+						FakeAttr string `json:"fakeAttr"`
+					}{FakeAttr: "fakeValue"},
+				},
+
+				expectedRequestBody: `{"fakeAttr":"fakeValue"}`,
+				responseStatusCode:  http.StatusOK,
+			},
+
+			{
+				description: "should send headers correctly",
+				requestData: RequestData{
+					Headers: map[string]string{
+						"fakeHeaderKey": "fakeHeaderValue",
+					},
+				},
+
+				expectedRequestHeaders: map[string]string{
+					"fakeHeaderKey": "fakeHeaderValue",
+				},
+				responseStatusCode: http.StatusOK,
+			},
+			{
+				description: "should parse response headers correctly",
+				requestData: RequestData{},
+				responseHeaders: map[string]string{
+					"fakeHeaderKey": "fakeHeaderValue",
+				},
+
+				expectedResponseHeaders: map[string]string{
+					"fakeHeaderKey": "fakeHeaderValue",
+				},
+				responseStatusCode: http.StatusOK,
+			},
+		} {
+			t.Run(test.description, func(t *testing.T) {
+				var requestBody []byte
+				var requestHeaders http.Header
+				svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					var err error
+					requestBody, err = io.ReadAll(r.Body)
+					tt.AssertNoErr(t, err)
+
+					requestHeaders = r.Header
+
+					for key, value := range test.responseHeaders {
+						w.Header().Set(key, value)
+					}
+					w.WriteHeader(test.responseStatusCode)
+				}))
+				defer svr.Close()
+
+				client := Client{
+					timeout: 1 * time.Second,
+				}
+
+				res, err := client.makeRequest(ctx, "POST", svr.URL, test.requestData)
+				if err != nil {
+					tt.AssertErrContains(t, err, test.expectedErr...)
+				}
+
+				tt.AssertEqual(t, res.StatusCode, test.responseStatusCode)
+
+				tt.AssertEqual(t, string(requestBody), test.expectedRequestBody)
+
+				for key, value := range test.expectedRequestHeaders {
+					tt.AssertEqual(t, requestHeaders.Get(key), value)
+				}
+
+				for key, value := range test.expectedResponseHeaders {
+					tt.AssertEqual(t, res.Header.Get(key), value)
+				}
+			})
+		}
+	})
+
+	t.Run("makeRequestWithMiddlewares", func(t *testing.T) {
+		t.Run("should run all the middlewares in the provided order", func(t *testing.T) {
+			middlewares := []Middleware{
+				func(
+					ctx context.Context,
+					method string,
+					url string,
+					data RequestData,
+					next NextMiddleware,
+				) (Response, error) {
+					data.Body = append(data.Body.([]string), "firstMiddleware")
+					resp, err := next(ctx, method, url, data)
+					resp.Body = append(resp.Body, []byte("+firstMiddleware")...)
+					err = AppendErr(err, fmt.Errorf("err from firstMiddleware"))
+					return resp, err
+				},
+				func(
+					ctx context.Context,
+					method string,
+					url string,
+					data RequestData,
+					next NextMiddleware,
+				) (Response, error) {
+					data.Body = append(data.Body.([]string), "secondMiddleware")
+					resp, err := next(ctx, method, url, data)
+					resp.Body = append(resp.Body, []byte("+secondMiddleware")...)
+					err = AppendErr(err, fmt.Errorf("err from secondMiddleware"))
+					return resp, err
+				},
+			}
+
+			var requestBody []byte
+			svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var err error
+				requestBody, err = io.ReadAll(r.Body)
+				tt.AssertNoErr(t, err)
+
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte("respFromServer"))
+			}))
+			defer svr.Close()
+
+			client := Client{
+				middlewares: middlewares,
+				timeout:     1 * time.Second,
+			}
+
+			res, err := client.makeRequestWithMiddlewares(ctx, "POST", svr.URL, RequestData{
+				Body: []string{
+					"bodyFromRequest",
+				},
+			})
+			tt.AssertErrContains(t, err, "firstMiddleware", "secondMiddleware", "400")
+			tt.AssertContains(t, string(res.Body), "firstMiddleware", "secondMiddleware", "respFromServer")
+			tt.AssertContains(t, string(requestBody), "firstMiddleware", "secondMiddleware", "bodyFromRequest")
+		})
+
+		t.Run("middlewares should be able to abort a request before sending it", func(t *testing.T) {
+			var passedOn []string
+
+			middlewares := []Middleware{
+				func(
+					ctx context.Context,
+					method string,
+					url string,
+					data RequestData,
+					next NextMiddleware,
+				) (Response, error) {
+					passedOn = append(passedOn, "firstMiddleware")
+					return Response{}, fmt.Errorf("abortingRequest")
+				},
+				func(
+					ctx context.Context,
+					method string,
+					url string,
+					data RequestData,
+					next NextMiddleware,
+				) (Response, error) {
+					passedOn = append(passedOn, "secondMiddleware")
+					return next(ctx, method, url, data)
+				},
+			}
+
+			svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				passedOn = append(passedOn, "server")
+			}))
+			defer svr.Close()
+
+			client := Client{
+				middlewares: middlewares,
+				timeout:     1 * time.Second,
+			}
+
+			client.makeRequestWithMiddlewares(ctx, "POST", svr.URL, RequestData{})
+
+			tt.AssertEqual(t, passedOn, []string{
+				"firstMiddleware",
+			})
+		})
+	})
+}
+
+type multierr []error
+
+func (m multierr) Error() string {
+	return fmt.Sprint([]error(m))
+}
+
+func AppendErr(oldErr error, newErr error) error {
+	if oldErr == nil {
+		return newErr
+	}
+
+	if newErr == nil {
+		return oldErr
+	}
+
+	if mErr, ok := oldErr.(multierr); ok {
+		return append(mErr, newErr)
+	}
+
+	return multierr{oldErr, newErr}
+}

@@ -2,6 +2,7 @@ package krest
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"net/http"
 	"time"
@@ -29,6 +30,21 @@ type RequestData struct {
 
 	Headers map[string]string
 
+	// It's the max number of retries, if 0 it defaults 1
+	MaxRetries int
+
+	// The start and max delay for the exponential backoff strategy
+	// if unset they default to 300ms and 32s respectively
+	BaseRetryDelay time.Duration
+	MaxRetryDelay  time.Duration
+
+	// Set this attribute if you want to personalize the retry behavior
+	// if nil it defaults to `rest.DefaultRetryRule()`
+	RetryRule func(resp *http.Response, err error) bool
+
+	// Use this for setting up mutual TLS
+	TLSConfig *tls.Config
+
 	// Set this option to true if you
 	// expect to receive big bodies of data
 	// and you don't want this library to
@@ -45,18 +61,6 @@ type RequestData struct {
 	// if you are not using the Stream option or if the call
 	// returns an error.
 	Stream bool
-
-	// It's the max number of retries, if 0 it defaults 1
-	MaxRetries int
-
-	// The start and max delay for the exponential backoff strategy
-	// if unset they default to 300ms and 32s respectively
-	BaseRetryDelay time.Duration
-	MaxRetryDelay  time.Duration
-
-	// Set this attribute if you want to personalize the retry behavior
-	// if nil it defaults to `rest.DefaultRetryRule()`
-	RetryRule func(resp *http.Response, err error) bool
 }
 
 // SetDefaultsIfNecessary sets the default values
@@ -85,7 +89,7 @@ type Response struct {
 	io.ReadCloser
 
 	Body       []byte
-	Header     map[string]string
+	Header     http.Header
 	StatusCode int
 }
 
