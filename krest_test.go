@@ -400,3 +400,59 @@ func AppendErr(oldErr error, newErr error) error {
 
 	return multierr{oldErr, newErr}
 }
+
+func TestRequestRetry(t *testing.T) {
+	type testCase struct {
+		desc               string
+		body               interface{}
+		expectedPayload    string
+		expectErrToContain []string
+	}
+
+	for _, test := range []testCase{
+		{
+			desc:            "should rebuild the payload correctly when retrying with bytes input",
+			body:            []byte("fakeBytesBody"),
+			expectedPayload: "fakeBytesBody",
+		},
+		{
+			desc: "should rebuild the payload correctly when retrying with input meant to be marshalled as JSON",
+			body: map[string]string{
+				"fakeKey": "fakeValue",
+			},
+			expectedPayload: `{"fakeKey":"fakeValue"}`,
+		},
+	} {
+		t.Run(test.desc, func(t *testing.T) {
+			respCodes := []int{502, 200}
+			var payload []byte
+
+			svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var err error
+				payload, err = io.ReadAll(r.Body)
+				tt.AssertNoErr(t, err)
+
+				code := respCodes[0]
+				respCodes = respCodes[1:]
+				w.WriteHeader(code)
+				fmt.Fprint(w, test.body)
+			}))
+			defer svr.Close()
+
+			client := Client{
+				timeout: 1 * time.Second,
+			}
+
+			_, err := client.Post(context.TODO(), svr.URL, RequestData{
+				Body:       test.body,
+				MaxRetries: 2,
+			})
+			if test.expectErrToContain != nil {
+				tt.AssertErrContains(t, err, test.expectErrToContain...)
+			}
+			tt.AssertNoErr(t, err)
+
+			tt.AssertEqual(t, string(payload), test.expectedPayload)
+		})
+	}
+}
