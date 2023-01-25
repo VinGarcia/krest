@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"time"
 )
@@ -106,7 +105,7 @@ func (c Client) makeRequest(
 		requestBody = nil
 	case io.Reader:
 		if data.MaxRetries > 1 {
-			return Response{}, fmt.Errorf("can't retry a request whose body is an io.Reader!")
+			return Response{}, fmt.Errorf("can't retry a request whose body is an io.Reader")
 		}
 
 		requestBody = body
@@ -116,7 +115,7 @@ func (c Client) makeRequest(
 		bytesPayload = []byte(body)
 	case map[string]io.Reader:
 		if data.MaxRetries > 1 {
-			return Response{}, fmt.Errorf("can't retry a request whose body depends on io.Reader's!")
+			return Response{}, fmt.Errorf("can't retry a request whose body depends on io.Reader's")
 		}
 
 		form, contentType, err := newMultipartStream(MultipartData(body))
@@ -167,7 +166,7 @@ func (c Client) makeRequest(
 	var body []byte
 	bodyReader := io.ReadCloser(resp.Body)
 	if !data.Stream || !isStatusSuccess {
-		body, err = ioutil.ReadAll(resp.Body)
+		body, err = io.ReadAll(resp.Body)
 		resp.Body.Close()
 		bodyReader = io.NopCloser(bytes.NewReader(body))
 	}
