@@ -8,7 +8,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -100,6 +99,7 @@ func (c Client) makeRequest(
 ) (_ Response, err error) {
 	data.SetDefaultsIfNecessary()
 
+	var bytesPayload []byte
 	var requestBody io.Reader
 	switch body := data.Body.(type) {
 	case nil:
@@ -111,9 +111,9 @@ func (c Client) makeRequest(
 
 		requestBody = body
 	case []byte:
-		requestBody = bytes.NewReader(body)
+		bytesPayload = body
 	case string:
-		requestBody = strings.NewReader(body)
+		bytesPayload = []byte(body)
 	case map[string]io.Reader:
 		if data.MaxRetries > 1 {
 			return Response{}, fmt.Errorf("can't retry a request whose body depends on io.Reader's!")
@@ -126,20 +126,10 @@ func (c Client) makeRequest(
 		data.Headers["Content-Type"] = contentType
 		requestBody = form
 	default:
-		inputBodyJSON, err := json.Marshal(data.Body)
+		bytesPayload, err = json.Marshal(data.Body)
 		if err != nil {
 			return Response{}, err
 		}
-		requestBody = bytes.NewReader(inputBodyJSON)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, method, url, requestBody)
-	if err != nil {
-		return Response{}, err
-	}
-
-	for k, v := range data.Headers {
-		req.Header.Set(k, v)
 	}
 
 	httpClient := http.Client{
@@ -151,6 +141,20 @@ func (c Client) makeRequest(
 
 	var resp *http.Response
 	Retry(ctx, data.BaseRetryDelay, data.MaxRetryDelay, data.MaxRetries, func() bool {
+		if bytesPayload != nil {
+			requestBody = bytes.NewReader(bytesPayload)
+		}
+
+		var req *http.Request
+		req, err = http.NewRequestWithContext(ctx, method, url, requestBody)
+		if err != nil {
+			return true
+		}
+
+		for k, v := range data.Headers {
+			req.Header.Set(k, v)
+		}
+
 		resp, err = httpClient.Do(req)
 		return data.RetryRule(resp, err)
 	})
