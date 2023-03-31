@@ -15,6 +15,7 @@ jobs:
 
     - name: Run linters
       run: |
+        go version
         go vet ./...
         go install honnef.co/go/tools/cmd/staticcheck@latest
         bash -c "$(go env GOPATH)/bin/staticcheck ./..."
