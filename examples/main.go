@@ -11,6 +11,8 @@ import (
 	"github.com/vingarcia/krest"
 )
 
+type any = interface{}
+
 // User ...
 type User struct {
 	Name    string  `json:"name"`
@@ -81,7 +83,7 @@ func getUser(ctx context.Context, rest krest.Provider) (User, error) {
 
 func sendUser(ctx context.Context, rest krest.Provider, user User) error {
 	_, err := rest.Post(ctx, "https://other.example.com", krest.RequestData{
-		Headers: map[string]string{
+		Headers: map[string]any{
 			"Authorization": "Bearer some-valid-jwt-token-goes-here",
 		},
 

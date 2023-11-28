@@ -124,7 +124,7 @@ func TestKrestClient(t *testing.T) {
 				client.timeout = 1 * time.Second
 
 				res, err := test.method(ctx, svr.URL, RequestData{
-					Headers: map[string]string{
+					Headers: map[string]any{
 						"accept": "application/json",
 					},
 				})
@@ -213,7 +213,7 @@ func TestKrestClient(t *testing.T) {
 			{
 				description: "should send headers correctly",
 				requestData: RequestData{
-					Headers: map[string]string{
+					Headers: map[string]any{
 						"fakeHeaderKey": "fakeHeaderValue",
 					},
 				},

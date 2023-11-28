@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+type any = interface{}
+
 // Provider describes the functions necessary to do all types of REST
 // requests.
 //
@@ -28,7 +30,7 @@ type RequestData struct {
 	// be marshaled into JSON
 	Body interface{}
 
-	Headers map[string]string
+	Headers map[string]any
 
 	// It's the max number of retries, if 0 it defaults 1
 	MaxRetries int
@@ -79,7 +81,7 @@ func (r *RequestData) SetDefaultsIfNecessary() {
 		r.RetryRule = DefaultRetryRule
 	}
 	if r.Headers == nil {
-		r.Headers = map[string]string{}
+		r.Headers = map[string]any{}
 	}
 }
 

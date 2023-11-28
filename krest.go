@@ -150,8 +150,13 @@ func (c Client) makeRequest(
 			return true
 		}
 
-		for k, v := range data.Headers {
-			req.Header.Set(k, v)
+		for k, value := range data.Headers {
+			switch v := value.(type) {
+			case string:
+				req.Header.Set(k, v)
+			case []string:
+				req.Header[k] = v
+			}
 		}
 
 		resp, err = httpClient.Do(req)
