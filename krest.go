@@ -156,6 +156,9 @@ func (c Client) makeRequest(
 				req.Header.Set(k, v)
 			case []string:
 				req.Header[k] = v
+			default:
+				err = fmt.Errorf("header of invalid type received for key '%s': %T", k, v)
+				return false
 			}
 		}
 

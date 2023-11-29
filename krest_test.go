@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -148,10 +149,10 @@ func TestKrestClient(t *testing.T) {
 			responseStatusCode int
 			responseHeaders    map[string]string
 
-			expectedRequestHeaders  map[string]string
+			expectedRequestHeaders  url.Values
 			expectedResponseHeaders map[string]string
 			expectedRequestBody     string
-			expectedErr             []string
+			expectErrToContain      []string
 		}
 
 		for _, test := range []testCases{
@@ -215,13 +216,30 @@ func TestKrestClient(t *testing.T) {
 				requestData: RequestData{
 					Headers: map[string]any{
 						"fakeHeaderKey": "fakeHeaderValue",
+						"fakeMultiHeaderKey": []string{
+							"fakeHeaderValue1", "fakeHeaderValue2",
+						},
 					},
 				},
 
-				expectedRequestHeaders: map[string]string{
-					"fakeHeaderKey": "fakeHeaderValue",
+				expectedRequestHeaders: url.Values{
+					// url.Values keys are formatted like this:
+					"Fakeheaderkey": []string{"fakeHeaderValue"},
+					"Fakemultiheaderkey": []string{
+						"fakeHeaderValue1", "fakeHeaderValue2",
+					},
 				},
 				responseStatusCode: http.StatusOK,
+			},
+			{
+				description: "should report errors when invalid header values are passed",
+				requestData: RequestData{
+					Headers: map[string]any{
+						"fakeHeaderKey": []any{"notAValidHeaderValueType"},
+					},
+				},
+
+				expectErrToContain: []string{"invalid", "header", "fakeHeaderKey"},
 			},
 			{
 				description: "should parse response headers correctly",
@@ -249,6 +267,9 @@ func TestKrestClient(t *testing.T) {
 					for key, value := range test.responseHeaders {
 						w.Header().Set(key, value)
 					}
+					if test.responseStatusCode < 100 {
+						test.responseStatusCode = 500
+					}
 					w.WriteHeader(test.responseStatusCode)
 				}))
 				defer svr.Close()
@@ -258,8 +279,8 @@ func TestKrestClient(t *testing.T) {
 				}
 
 				res, err := client.makeRequest(ctx, "POST", svr.URL, test.requestData)
-				if err != nil {
-					tt.AssertErrContains(t, err, test.expectedErr...)
+				if test.expectErrToContain != nil {
+					tt.AssertErrContains(t, err, test.expectErrToContain...)
 				}
 
 				tt.AssertEqual(t, res.StatusCode, test.responseStatusCode)
@@ -267,7 +288,7 @@ func TestKrestClient(t *testing.T) {
 				tt.AssertEqual(t, string(requestBody), test.expectedRequestBody)
 
 				for key, value := range test.expectedRequestHeaders {
-					tt.AssertEqual(t, requestHeaders.Get(key), value)
+					tt.AssertEqual(t, requestHeaders[key], value)
 				}
 
 				for key, value := range test.expectedResponseHeaders {
