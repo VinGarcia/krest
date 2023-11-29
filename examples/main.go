@@ -85,6 +85,7 @@ func sendUser(ctx context.Context, rest krest.Provider, user User) error {
 	_, err := rest.Post(ctx, "https://other.example.com", krest.RequestData{
 		Headers: map[string]any{
 			"Authorization": "Bearer some-valid-jwt-token-goes-here",
+			"Cookies":       []string{"foo=bar", "bar=foo"},
 		},
 
 		// Using the optional retry feature:
