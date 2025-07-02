@@ -96,7 +96,7 @@ type Response struct {
 }
 
 // DefaultRetryRule is the default retry rule that will retry (i.e. return true)
-// if the request ends with an error, if the status is > 500
+// if the request ends with an error, if the status is >= 500
 // or if the status is one of: StatusLocked, StatusTooEarly and StatusTooManyRequests.
 func DefaultRetryRule(resp *http.Response, err error) bool {
 	retriableStatus := map[int]bool{
@@ -104,7 +104,7 @@ func DefaultRetryRule(resp *http.Response, err error) bool {
 		http.StatusTooEarly:        true,
 		http.StatusTooManyRequests: true,
 	}
-	return err != nil || retriableStatus[resp.StatusCode] || resp.StatusCode > 500
+	return err != nil || retriableStatus[resp.StatusCode] || resp.StatusCode >= 500
 }
 
 // Middleware describes the expected format for this package middlewares
