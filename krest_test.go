@@ -114,6 +114,19 @@ func TestKrestClient(t *testing.T) {
 				expectedResp:       "Hello, client",
 				expectedStatusCode: http.StatusBadRequest,
 			},
+			{
+				description:        "OPTIONS: request is successful",
+				method:             client.Options,
+				expectedResp:       "Hello, client",
+				expectedStatusCode: http.StatusOK,
+			},
+			{
+				description:        "OPTIONS: bad request",
+				method:             client.Options,
+				expectedErr:        []string{"unexpected status code", "400", "Hello, client"},
+				expectedResp:       "Hello, client",
+				expectedStatusCode: http.StatusBadRequest,
+			},
 		} {
 			t.Run(test.description, func(t *testing.T) {
 				svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -336,7 +349,7 @@ func TestKrestClient(t *testing.T) {
 				tt.AssertNoErr(t, err)
 
 				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte("respFromServer"))
+				_, _ = w.Write([]byte("respFromServer"))
 			}))
 			defer svr.Close()
 
@@ -391,7 +404,7 @@ func TestKrestClient(t *testing.T) {
 				timeout:     1 * time.Second,
 			}
 
-			client.makeRequestWithMiddlewares(ctx, "POST", svr.URL, RequestData{})
+			_, _ = client.makeRequestWithMiddlewares(ctx, "POST", svr.URL, RequestData{})
 
 			tt.AssertEqual(t, passedOn, []string{
 				"firstMiddleware",

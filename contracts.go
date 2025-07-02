@@ -21,6 +21,7 @@ type Provider interface {
 	Put(ctx context.Context, url string, data RequestData) (resp Response, err error)
 	Patch(ctx context.Context, url string, data RequestData) (resp Response, err error)
 	Delete(ctx context.Context, url string, data RequestData) (resp Response, err error)
+	Options(ctx context.Context, url string, data RequestData) (resp Response, err error)
 }
 
 // RequestData describes the optional arguments for all

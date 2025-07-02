@@ -62,6 +62,12 @@ func (c Client) Delete(ctx context.Context, url string, data RequestData) (Respo
 	return c.makeRequestWithMiddlewares(ctx, "DELETE", url, data)
 }
 
+// Options will make a OPTIONS request to the input URL
+// and return the results
+func (c Client) Options(ctx context.Context, url string, data RequestData) (Response, error) {
+	return c.makeRequestWithMiddlewares(ctx, "OPTIONS", url, data)
+}
+
 func (c Client) makeRequestWithMiddlewares(
 	ctx context.Context,
 	method string,
