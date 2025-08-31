@@ -131,7 +131,7 @@ func TestKrestClient(t *testing.T) {
 			t.Run(test.description, func(t *testing.T) {
 				svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(test.expectedStatusCode)
-					fmt.Fprint(w, test.expectedResp)
+					_, _ = fmt.Fprint(w, test.expectedResp)
 				}))
 				defer svr.Close()
 
@@ -469,7 +469,7 @@ func TestRequestRetry(t *testing.T) {
 				code := respCodes[0]
 				respCodes = respCodes[1:]
 				w.WriteHeader(code)
-				fmt.Fprint(w, test.body)
+				_, _ = fmt.Fprint(w, test.body)
 			}))
 			defer svr.Close()
 

@@ -98,7 +98,10 @@ func (m *multipartStream) loadFormBuffer(buf *bytes.Buffer, numBytes int64) (err
 	if m.currentPartReader == nil && len(m.parts) == 0 {
 		if !m.formClosed {
 			// Write the closing of the form before returning io.EOF
-			m.multipartWriter.Close()
+			err = m.multipartWriter.Close()
+			if err != nil {
+				return err
+			}
 			m.formClosed = true
 			return nil
 		}

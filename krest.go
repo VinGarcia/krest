@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -181,7 +182,7 @@ func (c Client) makeRequest(
 	bodyReader := io.ReadCloser(resp.Body)
 	if !data.Stream || !isStatusSuccess {
 		body, err = io.ReadAll(resp.Body)
-		resp.Body.Close()
+		err = errors.Join(err, resp.Body.Close())
 		bodyReader = io.NopCloser(bytes.NewReader(body))
 	}
 
