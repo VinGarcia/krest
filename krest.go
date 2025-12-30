@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -67,6 +68,27 @@ func (c Client) Delete(ctx context.Context, url string, data RequestData) (Respo
 // and return the results
 func (c Client) Options(ctx context.Context, url string, data RequestData) (Response, error) {
 	return c.makeRequestWithMiddlewares(ctx, "OPTIONS", url, data)
+}
+
+// Do is only useful if you need to change the method programatically, otherwise prefer
+// the other public functions like Get() and Post().
+func (c Client) Do(ctx context.Context, method string, url string, data RequestData) (Response, error) {
+	switch strings.ToUpper(method) {
+	case "GET":
+		return c.Get(ctx, url, data)
+	case "POST":
+		return c.Post(ctx, url, data)
+	case "PUT":
+		return c.Put(ctx, url, data)
+	case "PATCH":
+		return c.Patch(ctx, url, data)
+	case "DELETE":
+		return c.Delete(ctx, url, data)
+	case "OPTIONS":
+		return c.Options(ctx, url, data)
+	default:
+		return Response{}, fmt.Errorf("unsupported request method: %q", method)
+	}
 }
 
 func (c Client) makeRequestWithMiddlewares(

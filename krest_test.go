@@ -37,11 +37,9 @@ func TestKrestClient(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("public methods", func(t *testing.T) {
-
-		client := Client{}
 		type testCases struct {
 			description string
-			method      func(ctx context.Context, url string, data RequestData) (Response, error)
+			method      string
 
 			expectedErr        []string
 			expectedResp       string
@@ -51,78 +49,78 @@ func TestKrestClient(t *testing.T) {
 		for _, test := range []testCases{
 			{
 				description:        "GET: request is successful",
-				method:             client.Get,
+				method:             "GET",
 				expectedResp:       "Hello, client",
 				expectedStatusCode: http.StatusOK,
 			},
 			{
 				description:        "GET: bad request",
-				method:             client.Get,
+				method:             "GET",
 				expectedErr:        []string{"unexpected status code", "400", "Hello, client"},
 				expectedResp:       "Hello, client",
 				expectedStatusCode: http.StatusBadRequest,
 			},
 			{
 				description:        "POST: request is successful",
-				method:             client.Post,
+				method:             "POST",
 				expectedResp:       "Hello, client",
 				expectedStatusCode: http.StatusOK,
 			},
 			{
 				description:        "POST: bad request",
-				method:             client.Post,
+				method:             "POST",
 				expectedErr:        []string{"unexpected status code", "400", "Hello, client"},
 				expectedResp:       "Hello, client",
 				expectedStatusCode: http.StatusBadRequest,
 			},
 			{
 				description:        "PUT: request is successful",
-				method:             client.Put,
+				method:             "PUT",
 				expectedResp:       "Hello, client",
 				expectedStatusCode: http.StatusOK,
 			},
 			{
 				description:        "PUT: bad request",
-				method:             client.Put,
+				method:             "PUT",
 				expectedErr:        []string{"unexpected status code", "400", "Hello, client"},
 				expectedResp:       "Hello, client",
 				expectedStatusCode: http.StatusBadRequest,
 			},
 			{
 				description:        "PATCH: request is successful",
-				method:             client.Patch,
+				method:             "PATCH",
 				expectedResp:       "Hello, client",
 				expectedStatusCode: http.StatusOK,
 			},
 			{
 				description:        "PATCH: bad request",
-				method:             client.Patch,
+				method:             "PATCH",
 				expectedErr:        []string{"unexpected status code", "400", "Hello, client"},
 				expectedResp:       "Hello, client",
 				expectedStatusCode: http.StatusBadRequest,
 			},
 			{
 				description:        "DELETE: request is successful",
-				method:             client.Delete,
+				method:             "DELETE",
 				expectedResp:       "Hello, client",
 				expectedStatusCode: http.StatusOK,
 			},
 			{
 				description:        "DELETE: bad request",
-				method:             client.Delete,
+				method:             "DELETE",
 				expectedErr:        []string{"unexpected status code", "400", "Hello, client"},
 				expectedResp:       "Hello, client",
 				expectedStatusCode: http.StatusBadRequest,
 			},
 			{
 				description:        "OPTIONS: request is successful",
-				method:             client.Options,
+				method:             "OPTIONS",
 				expectedResp:       "Hello, client",
 				expectedStatusCode: http.StatusOK,
 			},
 			{
 				description:        "OPTIONS: bad request",
-				method:             client.Options,
+				method:             "OPTIONS",
 				expectedErr:        []string{"unexpected status code", "400", "Hello, client"},
 				expectedResp:       "Hello, client",
 				expectedStatusCode: http.StatusBadRequest,
@@ -135,9 +133,11 @@ func TestKrestClient(t *testing.T) {
 				}))
 				defer svr.Close()
 
-				client.timeout = 1 * time.Second
+				client := Client{
+					timeout: 1 * time.Second,
+				}
 
-				res, err := test.method(ctx, svr.URL, RequestData{
+				res, err := client.Do(ctx, test.method, svr.URL, RequestData{
 					Headers: map[string]any{
 						"accept": "application/json",
 					},
