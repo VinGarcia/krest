@@ -40,8 +40,9 @@ func TestKrestClient(t *testing.T) {
 		type testCases struct {
 			description string
 			method      string
+			requestData RequestData
 
-			expectedErr        []string
+			expectErrToContain []string
 			expectedResp       string
 			expectedStatusCode int
 		}
@@ -56,7 +57,7 @@ func TestKrestClient(t *testing.T) {
 			{
 				description:        "GET: bad request",
 				method:             "GET",
-				expectedErr:        []string{"unexpected status code", "400", "Hello, client"},
+				expectErrToContain: []string{"unexpected status code", "400", "Hello, client"},
 				expectedResp:       "Hello, client",
 				expectedStatusCode: http.StatusBadRequest,
 			},
@@ -69,7 +70,7 @@ func TestKrestClient(t *testing.T) {
 			{
 				description:        "POST: bad request",
 				method:             "POST",
-				expectedErr:        []string{"unexpected status code", "400", "Hello, client"},
+				expectErrToContain: []string{"unexpected status code", "400", "Hello, client"},
 				expectedResp:       "Hello, client",
 				expectedStatusCode: http.StatusBadRequest,
 			},
@@ -82,7 +83,7 @@ func TestKrestClient(t *testing.T) {
 			{
 				description:        "PUT: bad request",
 				method:             "PUT",
-				expectedErr:        []string{"unexpected status code", "400", "Hello, client"},
+				expectErrToContain: []string{"unexpected status code", "400", "Hello, client"},
 				expectedResp:       "Hello, client",
 				expectedStatusCode: http.StatusBadRequest,
 			},
@@ -95,7 +96,7 @@ func TestKrestClient(t *testing.T) {
 			{
 				description:        "PATCH: bad request",
 				method:             "PATCH",
-				expectedErr:        []string{"unexpected status code", "400", "Hello, client"},
+				expectErrToContain: []string{"unexpected status code", "400", "Hello, client"},
 				expectedResp:       "Hello, client",
 				expectedStatusCode: http.StatusBadRequest,
 			},
@@ -108,7 +109,7 @@ func TestKrestClient(t *testing.T) {
 			{
 				description:        "DELETE: bad request",
 				method:             "DELETE",
-				expectedErr:        []string{"unexpected status code", "400", "Hello, client"},
+				expectErrToContain: []string{"unexpected status code", "400", "Hello, client"},
 				expectedResp:       "Hello, client",
 				expectedStatusCode: http.StatusBadRequest,
 			},
@@ -121,7 +122,7 @@ func TestKrestClient(t *testing.T) {
 			{
 				description:        "OPTIONS: bad request",
 				method:             "OPTIONS",
-				expectedErr:        []string{"unexpected status code", "400", "Hello, client"},
+				expectErrToContain: []string{"unexpected status code", "400", "Hello, client"},
 				expectedResp:       "Hello, client",
 				expectedStatusCode: http.StatusBadRequest,
 			},
@@ -137,13 +138,11 @@ func TestKrestClient(t *testing.T) {
 					timeout: 1 * time.Second,
 				}
 
-				res, err := client.Do(ctx, test.method, svr.URL, RequestData{
-					Headers: map[string]any{
-						"accept": "application/json",
-					},
-				})
-				if err != nil {
-					tt.AssertErrContains(t, err, test.expectedErr...)
+				res, err := client.Do(ctx, test.method, svr.URL, test.requestData)
+				if test.expectErrToContain != nil {
+					tt.AssertErrContains(t, err, test.expectErrToContain...)
+				} else {
+					tt.AssertNoErr(t, err)
 				}
 
 				body, err := io.ReadAll(res.ReadCloser)
@@ -409,6 +408,49 @@ func TestKrestClient(t *testing.T) {
 			tt.AssertEqual(t, passedOn, []string{
 				"firstMiddleware",
 			})
+		})
+	})
+
+	t.Run("followRedirects config", func(t *testing.T) {
+
+		t.Run("should not follow redirects by default", func(t *testing.T) {
+			svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/redirected" {
+					return
+				}
+
+				http.Redirect(w, r, "/redirected", http.StatusTemporaryRedirect)
+			}))
+			defer svr.Close()
+
+			client := Client{
+				timeout: time.Second,
+			}
+
+			resp, err := client.Get(ctx, svr.URL, RequestData{})
+			tt.AssertErrContains(t, err, "307")
+			tt.AssertEqual(t, resp.StatusCode, 307)
+		})
+
+		t.Run("should follow redirects when explicitly requested", func(t *testing.T) {
+			svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/redirected" {
+					return
+				}
+
+				http.Redirect(w, r, "/redirected", http.StatusTemporaryRedirect)
+			}))
+			defer svr.Close()
+
+			client := Client{
+				timeout: time.Second,
+			}
+
+			resp, err := client.Get(ctx, svr.URL, RequestData{
+				FollowRedirects: true,
+			})
+			tt.AssertNoErr(t, err)
+			tt.AssertEqual(t, resp.StatusCode, 200)
 		})
 	})
 }

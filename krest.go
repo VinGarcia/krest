@@ -165,6 +165,16 @@ func (c Client) makeRequest(
 		Transport: &http.Transport{
 			TLSClientConfig: data.TLSConfig,
 		},
+		// Don't follow redirects by default:
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	if data.FollowRedirects {
+		// Restore the default http.Client behavior of
+		// following redirects up to 10 times:
+		httpClient.CheckRedirect = nil
 	}
 
 	var resp *http.Response

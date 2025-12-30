@@ -48,6 +48,15 @@ type RequestData struct {
 	// Use this for setting up mutual TLS
 	TLSConfig *tls.Config
 
+	// FollowRedirects is false by default and if enabled will
+	// cause the client to follow http 3xx redirect locations
+	// automatically up to 10 times.
+	//
+	// Note this is the opposite of the default behavior for http.Client
+	// where if not specified it follows up to 10 times and you need to
+	// opt-out of this behavior, here you opt-in.
+	FollowRedirects bool
+
 	// Set this option to true if you
 	// expect to receive big bodies of data
 	// and you don't want this library to
