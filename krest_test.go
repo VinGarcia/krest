@@ -304,7 +304,7 @@ func TestKrestClient(t *testing.T) {
 				}
 
 				for key, value := range test.expectedResponseHeaders {
-					tt.AssertEqual(t, res.Header.Get(key), value)
+					tt.AssertEqual(t, res.Headers.Get(key), value)
 				}
 			})
 		}

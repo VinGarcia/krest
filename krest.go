@@ -228,7 +228,7 @@ func (c Client) makeRequest(
 	return Response{
 		ReadCloser: bodyReader,
 		Body:       body,
-		Header:     resp.Header,
+		Headers:    resp.Header,
 		StatusCode: resp.StatusCode,
 	}, err
 }

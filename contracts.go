@@ -101,7 +101,7 @@ type Response struct {
 	io.ReadCloser
 
 	Body       []byte
-	Header     http.Header
+	Headers    http.Header
 	StatusCode int
 }
 
