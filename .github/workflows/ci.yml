@@ -23,4 +23,10 @@ jobs:
         bash -c "$(go env GOPATH)/bin/errcheck ./..."
 
     - name: Test
-      run: go test ./...
+      run: go test -coverprofile=coverage.txt ./...
+
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        slug: VinGarcia/krest
