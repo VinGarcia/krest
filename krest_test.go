@@ -15,18 +15,18 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	type testCases struct {
-		description string
-		timeout     time.Duration
+	tests := []struct {
+		desc    string
+		timeout time.Duration
+	}{
+		{
+			desc:    "With timeout",
+			timeout: 1 * time.Millisecond,
+		},
 	}
 
-	for _, test := range []testCases{
-		{
-			description: "With timeout",
-			timeout:     1 * time.Millisecond,
-		},
-	} {
-		t.Run(test.description, func(t *testing.T) {
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
 			client := New(test.timeout)
 			tt.AssertEqual(t, client.timeout, 1*time.Millisecond)
 		})
@@ -37,7 +37,7 @@ func TestKrestClient(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("public methods", func(t *testing.T) {
-		type testCases struct {
+		tests := []struct {
 			description string
 			method      string
 			requestData RequestData
@@ -45,9 +45,7 @@ func TestKrestClient(t *testing.T) {
 			expectErrToContain []string
 			expectedResp       string
 			expectedStatusCode int
-		}
-
-		for _, test := range []testCases{
+		}{
 			{
 				description:        "GET: request is successful",
 				method:             "GET",
@@ -126,7 +124,9 @@ func TestKrestClient(t *testing.T) {
 				expectedResp:       "Hello, client",
 				expectedStatusCode: http.StatusBadRequest,
 			},
-		} {
+		}
+
+		for _, test := range tests {
 			t.Run(test.description, func(t *testing.T) {
 				svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(test.expectedStatusCode)
@@ -155,7 +155,7 @@ func TestKrestClient(t *testing.T) {
 	})
 
 	t.Run("makeRequest", func(t *testing.T) {
-		type testCases struct {
+		tests := []struct {
 			description        string
 			requestData        RequestData
 			responseStatusCode int
@@ -165,9 +165,7 @@ func TestKrestClient(t *testing.T) {
 			expectedResponseHeaders map[string]string
 			expectedRequestBody     string
 			expectErrToContain      []string
-		}
-
-		for _, test := range []testCases{
+		}{
 			{
 				description:         "should work with a nil body",
 				requestData:         RequestData{},
@@ -265,7 +263,9 @@ func TestKrestClient(t *testing.T) {
 				},
 				responseStatusCode: http.StatusOK,
 			},
-		} {
+		}
+
+		for _, test := range tests {
 			t.Run(test.description, func(t *testing.T) {
 				var requestBody []byte
 				var requestHeaders http.Header
@@ -478,14 +478,12 @@ func AppendErr(oldErr error, newErr error) error {
 }
 
 func TestRequestRetry(t *testing.T) {
-	type testCase struct {
+	tests := []struct {
 		desc               string
 		body               interface{}
 		expectedPayload    string
 		expectErrToContain []string
-	}
-
-	for _, test := range []testCase{
+	}{
 		{
 			desc:            "should rebuild the payload correctly when retrying with bytes input",
 			body:            []byte("fakeBytesBody"),
@@ -498,7 +496,9 @@ func TestRequestRetry(t *testing.T) {
 			},
 			expectedPayload: `{"fakeKey":"fakeValue"}`,
 		},
-	} {
+	}
+
+	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			respCodes := []int{502, 200}
 			var payload []byte

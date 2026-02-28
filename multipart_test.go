@@ -22,16 +22,14 @@ func TestMultipartRequests(t *testing.T) {
 	mockServer := httptest.NewServer(&handler)
 	defer mockServer.Close()
 
-	type testCase struct {
+	tests := []struct {
 		desc  string
 		parts map[string]io.Reader
 
 		expectedFilenames   map[string]string
 		expectedPartHeaders map[string]textproto.MIMEHeader
 		expectedPartBodies  map[string]string
-	}
-
-	for _, test := range []testCase{
+	}{
 		{
 			desc: "should read parsed items correctly",
 			parts: map[string]io.Reader{
@@ -83,7 +81,9 @@ func TestMultipartRequests(t *testing.T) {
 				"fakeItemName2": "fakeBlob2",
 			},
 		},
-	} {
+	}
+
+	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			partFilenames := map[string]string{}
 			partHeaders := map[string]textproto.MIMEHeader{}
