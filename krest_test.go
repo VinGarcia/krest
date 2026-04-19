@@ -2,6 +2,7 @@ package krest
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
@@ -134,9 +135,7 @@ func TestKrestClient(t *testing.T) {
 				}))
 				defer svr.Close()
 
-				client := Client{
-					timeout: 1 * time.Second,
-				}
+				client := New(1 * time.Second)
 
 				res, err := client.Do(ctx, test.method, svr.URL, test.requestData)
 				if test.expectErrToContain != nil {
@@ -286,9 +285,7 @@ func TestKrestClient(t *testing.T) {
 				}))
 				defer svr.Close()
 
-				client := Client{
-					timeout: 1 * time.Second,
-				}
+				client := New(1 * time.Second)
 
 				res, err := client.makeRequest(ctx, "POST", svr.URL, test.requestData)
 				if test.expectErrToContain != nil {
@@ -352,10 +349,7 @@ func TestKrestClient(t *testing.T) {
 			}))
 			defer svr.Close()
 
-			client := Client{
-				middlewares: middlewares,
-				timeout:     1 * time.Second,
-			}
+			client := New(1*time.Second, middlewares...)
 
 			res, err := client.makeRequestWithMiddlewares(ctx, "POST", svr.URL, RequestData{
 				Body: []string{
@@ -398,10 +392,7 @@ func TestKrestClient(t *testing.T) {
 			}))
 			defer svr.Close()
 
-			client := Client{
-				middlewares: middlewares,
-				timeout:     1 * time.Second,
-			}
+			client := New(1*time.Second, middlewares...)
 
 			_, _ = client.makeRequestWithMiddlewares(ctx, "POST", svr.URL, RequestData{})
 
@@ -423,9 +414,7 @@ func TestKrestClient(t *testing.T) {
 			}))
 			defer svr.Close()
 
-			client := Client{
-				timeout: time.Second,
-			}
+			client := New(time.Second)
 
 			resp, err := client.Get(ctx, svr.URL, RequestData{})
 			tt.AssertErrContains(t, err, "307")
@@ -442,9 +431,7 @@ func TestKrestClient(t *testing.T) {
 			}))
 			defer svr.Close()
 
-			client := Client{
-				timeout: time.Second,
-			}
+			client := New(time.Second)
 
 			resp, err := client.Get(ctx, svr.URL, RequestData{
 				FollowRedirects: true,
@@ -515,9 +502,7 @@ func TestRequestRetry(t *testing.T) {
 			}))
 			defer svr.Close()
 
-			client := Client{
-				timeout: 1 * time.Second,
-			}
+			client := New(1 * time.Second)
 
 			_, err := client.Post(context.TODO(), svr.URL, RequestData{
 				Body:       test.body,
@@ -531,4 +516,80 @@ func TestRequestRetry(t *testing.T) {
 			tt.AssertEqual(t, string(payload), test.expectedPayload)
 		})
 	}
+}
+
+func TestTransportCache(t *testing.T) {
+	t.Run("should reuse transport for nil TLSConfig", func(t *testing.T) {
+		cache := &transportCache{
+			defaultTransport: newTransport(nil),
+			maxSize:          defaultMaxTransports,
+		}
+
+		t1 := cache.get(nil)
+		t2 := cache.get(nil)
+		tt.AssertTrue(t, t1 == t2, "transports should match")
+	})
+
+	t.Run("should reuse transport for same TLSConfig pointer", func(t *testing.T) {
+		cache := &transportCache{
+			defaultTransport: newTransport(nil),
+			maxSize:          defaultMaxTransports,
+		}
+
+		cfg := &tls.Config{}
+		t1 := cache.get(cfg)
+		t2 := cache.get(cfg)
+		tt.AssertTrue(t, t1 == t2, "transports should match")
+	})
+
+	t.Run("should create different transports for different TLSConfig pointers", func(t *testing.T) {
+		cache := &transportCache{
+			defaultTransport: newTransport(nil),
+			maxSize:          defaultMaxTransports,
+		}
+
+		cfg1 := &tls.Config{}
+		cfg2 := &tls.Config{}
+		t1 := cache.get(cfg1)
+		t2 := cache.get(cfg2)
+		tt.AssertTrue(t, t1 != t2, "transports should be different")
+	})
+
+	t.Run("should evict oldest transport when cache is full", func(t *testing.T) {
+		cache := &transportCache{
+			defaultTransport: newTransport(nil),
+			maxSize:          2,
+		}
+
+		cfg1 := &tls.Config{}
+		cfg2 := &tls.Config{}
+		cfg3 := &tls.Config{}
+
+		t1 := cache.get(cfg1)
+		cache.get(cfg2)
+
+		// This should evict cfg1
+		cache.get(cfg3)
+
+		// cfg1 should now create a new transport
+		t1New := cache.get(cfg1)
+		tt.AssertTrue(t, t1 != t1New, "t1 should have been evicted and replaced")
+	})
+
+	t.Run("should not evict recently accessed entries that are still in ring", func(t *testing.T) {
+		cache := &transportCache{
+			defaultTransport: newTransport(nil),
+			maxSize:          3,
+		}
+
+		cfg1 := &tls.Config{}
+		cfg2 := &tls.Config{}
+
+		t1 := cache.get(cfg1)
+		cache.get(cfg2)
+
+		// Access cfg1 again (cache hit, no new ring entry)
+		t1Again := cache.get(cfg1)
+		tt.AssertTrue(t, t1 == t1Again, "t1 should still be the same")
+	})
 }

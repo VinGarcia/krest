@@ -46,6 +46,10 @@ type RequestData struct {
 	RetryRule func(resp *http.Response, err error) bool
 
 	// Use this for setting up mutual TLS
+	//
+	// Note: Avoid allocating a new tls.Config each time a request is made,
+	// this will cause unnecessary `http.Transport`s to be allocated each time.
+	// (up to the cache maxSize config)
 	TLSConfig *tls.Config
 
 	// FollowRedirects is false by default and if enabled will

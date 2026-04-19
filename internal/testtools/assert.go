@@ -75,3 +75,7 @@ func AssertApproxTime(t *testing.T, tolerance time.Duration, v1, v2 time.Time, f
 
 	require.True(t, diff <= tolerance, fmt.Sprintf(format, args...))
 }
+
+func AssertTrue(t *testing.T, b bool, msg string) {
+	require.True(t, b, msg)
+}

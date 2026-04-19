@@ -3,30 +3,123 @@ package krest
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
-// Client contains methods for making rest requests
-// these methods accept any struct that can be marshaled into JSON
+const defaultMaxTransports = 10
+
+// transportCache holds reusable HTTP transports to avoid creating a new one per request.
+//
+// A default transport is always available for requests without a custom TLSConfig (the common case).
+// For requests with a custom TLSConfig, transports are cached by pointer identity and evicted
+// using a ring buffer when the cache is full.
+type transportCache struct {
+	defaultTransport *http.Transport
+
+	mu         sync.Mutex
+	maxSize    int
+	transports map[*tls.Config]*http.Transport
+	ring       []*tls.Config
+	ringIdx    int
+}
+
+func (tc *transportCache) get(tlsConfig *tls.Config) *http.Transport {
+	if tlsConfig == nil {
+		return tc.defaultTransport
+	}
+
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+
+	// Lazy init: only allocate the map and ring on first use
+	if tc.transports == nil {
+		tc.transports = make(map[*tls.Config]*http.Transport, tc.maxSize)
+		tc.ring = make([]*tls.Config, tc.maxSize)
+	}
+
+	if t, ok := tc.transports[tlsConfig]; ok {
+		return t
+	}
+
+	// Evict the oldest entry if the ring slot is occupied
+	if old := tc.ring[tc.ringIdx]; old != nil {
+		if t, ok := tc.transports[old]; ok {
+			t.CloseIdleConnections()
+			delete(tc.transports, old)
+		}
+	}
+
+	t := newTransport(tlsConfig)
+	tc.transports[tlsConfig] = t
+	tc.ring[tc.ringIdx] = tlsConfig
+	tc.ringIdx = (tc.ringIdx + 1) % tc.maxSize
+
+	return t
+}
+
+func newTransport(tlsConfig *tls.Config) *http.Transport {
+	return &http.Transport{
+		TLSClientConfig: tlsConfig,
+
+		// These configs below match the values for http.DefaultTransport:
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     90 * time.Second,
+	}
+}
+
+// Client contains methods for making rest requests.
+// These methods accept any struct that can be marshaled into JSON
 // but the response is returned in Bytes, since not all APIs follow
 // rest strictly.
 type Client struct {
 	timeout     time.Duration
 	middlewares []Middleware
+	transports  *transportCache
 }
 
 // New instantiates a new rest client
-func New(timeout time.Duration, middlewares ...Middleware) Client {
-	return Client{
+func New(timeout time.Duration, middlewares ...Middleware) *Client {
+	return &Client{
 		timeout:     timeout,
 		middlewares: middlewares,
+		transports: &transportCache{
+			defaultTransport: newTransport(nil),
+			maxSize:          defaultMaxTransports,
+		},
 	}
+}
+
+// SetMaxTransports sets the maximum number of cached transports for custom TLS configurations.
+// This does not affect the default transport used for requests without a TLSConfig.
+// If maxTransports is 0 or negative, the default value of 10 is used.
+func (c *Client) SetMaxTransports(maxTransports int) {
+	if maxTransports <= 0 {
+		maxTransports = defaultMaxTransports
+	}
+	c.transports.mu.Lock()
+	defer c.transports.mu.Unlock()
+
+	c.transports.maxSize = maxTransports
+	// Reset the cache so the new size takes effect cleanly
+	for _, cfg := range c.transports.ring {
+		if cfg != nil {
+			if t, ok := c.transports.transports[cfg]; ok {
+				t.CloseIdleConnections()
+			}
+		}
+	}
+	c.transports.transports = nil
+	c.transports.ring = nil
+	c.transports.ringIdx = 0
 }
 
 // AddMiddleware adds one or more new middlewares to this instance
@@ -36,43 +129,43 @@ func (c *Client) AddMiddleware(middlewares ...Middleware) {
 
 // Get will make a GET request to the input URL
 // and return the results
-func (c Client) Get(ctx context.Context, url string, data RequestData) (Response, error) {
+func (c *Client) Get(ctx context.Context, url string, data RequestData) (Response, error) {
 	return c.makeRequestWithMiddlewares(ctx, "GET", url, data)
 }
 
 // Post will make a POST request to the input URL
 // and return the results
-func (c Client) Post(ctx context.Context, url string, data RequestData) (Response, error) {
+func (c *Client) Post(ctx context.Context, url string, data RequestData) (Response, error) {
 	return c.makeRequestWithMiddlewares(ctx, "POST", url, data)
 }
 
 // Put will make a PUT request to the input URL
 // and return the results
-func (c Client) Put(ctx context.Context, url string, data RequestData) (Response, error) {
+func (c *Client) Put(ctx context.Context, url string, data RequestData) (Response, error) {
 	return c.makeRequestWithMiddlewares(ctx, "PUT", url, data)
 }
 
 // Patch will make a PATCH request to the input URL
 // and return the results
-func (c Client) Patch(ctx context.Context, url string, data RequestData) (Response, error) {
+func (c *Client) Patch(ctx context.Context, url string, data RequestData) (Response, error) {
 	return c.makeRequestWithMiddlewares(ctx, "PATCH", url, data)
 }
 
 // Delete will make a DELETE request to the input URL
 // and return the results
-func (c Client) Delete(ctx context.Context, url string, data RequestData) (Response, error) {
+func (c *Client) Delete(ctx context.Context, url string, data RequestData) (Response, error) {
 	return c.makeRequestWithMiddlewares(ctx, "DELETE", url, data)
 }
 
 // Options will make a OPTIONS request to the input URL
 // and return the results
-func (c Client) Options(ctx context.Context, url string, data RequestData) (Response, error) {
+func (c *Client) Options(ctx context.Context, url string, data RequestData) (Response, error) {
 	return c.makeRequestWithMiddlewares(ctx, "OPTIONS", url, data)
 }
 
 // Do is only useful if you need to change the method programatically, otherwise prefer
 // the other public functions like Get() and Post().
-func (c Client) Do(ctx context.Context, method string, url string, data RequestData) (Response, error) {
+func (c *Client) Do(ctx context.Context, method string, url string, data RequestData) (Response, error) {
 	switch strings.ToUpper(method) {
 	case "GET":
 		return c.Get(ctx, url, data)
@@ -91,7 +184,7 @@ func (c Client) Do(ctx context.Context, method string, url string, data RequestD
 	}
 }
 
-func (c Client) makeRequestWithMiddlewares(
+func (c *Client) makeRequestWithMiddlewares(
 	ctx context.Context,
 	method string,
 	url string,
@@ -119,7 +212,7 @@ func (c Client) makeRequestWithMiddlewares(
 	return middlewareChain(ctx, method, url, data)
 }
 
-func (c Client) makeRequest(
+func (c *Client) makeRequest(
 	ctx context.Context,
 	method string,
 	url string,
@@ -161,10 +254,8 @@ func (c Client) makeRequest(
 	}
 
 	httpClient := http.Client{
-		Timeout: c.timeout,
-		Transport: &http.Transport{
-			TLSClientConfig: data.TLSConfig,
-		},
+		Timeout:   c.timeout,
+		Transport: c.transports.get(data.TLSConfig),
 		// Don't follow redirects by default:
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
