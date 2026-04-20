@@ -2,13 +2,16 @@ package krest
 
 import "context"
 
+var _ Provider = Mock{}
+
 // Mock mocks the krest.Provider interface with a configurable structure
 type Mock struct {
-	GetFn    func(ctx context.Context, url string, data RequestData) (resp Response, err error)
-	PostFn   func(ctx context.Context, url string, data RequestData) (resp Response, err error)
-	PutFn    func(ctx context.Context, url string, data RequestData) (resp Response, err error)
-	PatchFn  func(ctx context.Context, url string, data RequestData) (resp Response, err error)
-	DeleteFn func(ctx context.Context, url string, data RequestData) (resp Response, err error)
+	GetFn     func(ctx context.Context, url string, data RequestData) (resp Response, err error)
+	PostFn    func(ctx context.Context, url string, data RequestData) (resp Response, err error)
+	PutFn     func(ctx context.Context, url string, data RequestData) (resp Response, err error)
+	PatchFn   func(ctx context.Context, url string, data RequestData) (resp Response, err error)
+	DeleteFn  func(ctx context.Context, url string, data RequestData) (resp Response, err error)
+	OptionsFn func(ctx context.Context, url string, data RequestData) (Response, error)
 }
 
 // Get mocks the krest.Provider.Get method
@@ -49,4 +52,8 @@ func (m Mock) Delete(ctx context.Context, url string, data RequestData) (resp Re
 		return m.DeleteFn(ctx, url, data)
 	}
 	return Response{}, nil
+}
+
+func (m Mock) Options(ctx context.Context, url string, data RequestData) (Response, error) {
+	return m.OptionsFn(ctx, url, data)
 }
