@@ -51,6 +51,19 @@ func TestRetry(t *testing.T) {
 		assert.Equal(t, len(calls), 1)
 	})
 
+	t.Run("should not backoff after the final attempt", func(t *testing.T) {
+		startTime := time.Now()
+		ctx := context.TODO()
+		Retry(ctx, 10*time.Millisecond, 1*time.Second, 3, func() bool {
+			return true
+		})
+		elapsed := time.Since(startTime)
+
+		// Only the 2 gaps BETWEEN the 3 attempts should be waited (10ms + 20ms);
+		// a wasted sleep after the last attempt would add a 3rd gap (40ms).
+		assertApprox(t, 8*time.Millisecond, elapsed, 30*time.Millisecond)
+	})
+
 	t.Run("should backoff exponentially with a max limit", func(t *testing.T) {
 		startTime := time.Now()
 		var pauses []time.Duration

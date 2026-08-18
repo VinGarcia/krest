@@ -13,7 +13,8 @@ import (
 func Retry(ctx context.Context, baseDelay time.Duration, maxDelay time.Duration, maxRetries int, fn func() bool) {
 	for i := 0; i < maxRetries; i, baseDelay = i+1, minDuration(baseDelay*2+randMillis(), maxDelay) {
 		shouldRetry := fn()
-		if !shouldRetry {
+		// The final attempt has no retry to wait for, so don't sleep after it.
+		if !shouldRetry || i == maxRetries-1 {
 			break
 		}
 
