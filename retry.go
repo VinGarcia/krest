@@ -17,6 +17,11 @@ func Retry(ctx context.Context, baseDelay time.Duration, maxDelay time.Duration,
 			break
 		}
 
+		// The final attempt has no retry to wait for, so don't sleep after it.
+		if i == maxRetries-1 {
+			break
+		}
+
 		select {
 		case <-ctx.Done():
 			return
