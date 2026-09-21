@@ -125,6 +125,10 @@ func sendUser(ctx context.Context, rest krest.Provider, user User) error {
 		// Using the optional retry feature:
 		MaxRetries: 3,
 
+		// Optionally control how a `Retry-After` header is honored (see below);
+		// the zero value already does the RFC-compliant thing, so this is optional:
+		RetryAfterAction: krest.RetryAfterHonor,
+
 		// Again using intermediary structs (or in this case a map) is also recommended
 		// for encoding messages to match other APIs so you can keep your internal models
 		// decoupled from any external dependencies:
@@ -142,3 +146,18 @@ func sendUser(ctx context.Context, rest krest.Provider, user User) error {
 	return nil
 }
 ```
+
+## Honoring the `Retry-After` header
+
+When a retryable response (e.g. `429` or `503`) carries a `Retry-After` header
+(RFC 9110 §10.2.3, both the delta-seconds and HTTP-date formats are supported),
+the `RetryAfterAction` field on `RequestData` controls what the client does:
+
+- `RetryAfterHonor` (the default, i.e. the zero value): wait the advertised delay
+  before retrying, bounded by the context deadline. To avoid blocking for an
+  indeterminate time, if the advertised delay is greater than `MaxRetryDelay` the
+  client does not wait and returns that response as the final one instead.
+- `RetryAfterError`: never wait for `Retry-After`; return the response as the final
+  one as soon as the header is seen on a retryable response.
+- `RetryAfterIgnore`: ignore the header entirely and fall back to the normal
+  exponential backoff.

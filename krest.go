@@ -269,7 +269,7 @@ func (c *Client) makeRequest(
 	}
 
 	var resp *http.Response
-	Retry(ctx, data.BaseRetryDelay, data.MaxRetryDelay, data.MaxRetries, func() bool {
+	retryWithBackoff(ctx, data.BaseRetryDelay, data.MaxRetryDelay, data.MaxRetries, func() (bool, time.Duration) {
 		if bytesPayload != nil {
 			requestBody = bytes.NewReader(bytesPayload)
 		}
@@ -277,7 +277,7 @@ func (c *Client) makeRequest(
 		var req *http.Request
 		req, err = http.NewRequestWithContext(ctx, method, url, requestBody)
 		if err != nil {
-			return true
+			return true, -1
 		}
 
 		for k, value := range data.Headers {
@@ -288,12 +288,18 @@ func (c *Client) makeRequest(
 				req.Header[k] = v
 			default:
 				err = fmt.Errorf("header of invalid type received for key '%s': %T", k, v)
-				return false
+				return false, -1
 			}
 		}
 
 		resp, err = httpClient.Do(req)
-		return data.RetryRule(resp, err)
+		if !data.RetryRule(resp, err) {
+			return false, -1
+		}
+
+		// The response is retryable: let the Retry-After policy decide whether to
+		// wait (and for how long) or to surface this response as the final one.
+		return applyRetryAfter(data.RetryAfterAction, data.MaxRetryDelay, resp, time.Now())
 	})
 	if err != nil {
 		return Response{}, err
