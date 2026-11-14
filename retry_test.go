@@ -209,6 +209,13 @@ func TestApplyRetryAfter(t *testing.T) {
 			expectedOverride:     -1,
 		},
 		{
+			desc:                 "error mode falls back to backoff when header is malformed",
+			action:               RetryAfterError,
+			resp:                 newResp("garbage"),
+			expectedKeepRetrying: true,
+			expectedOverride:     -1,
+		},
+		{
 			desc:                 "error mode falls back to backoff when header absent",
 			action:               RetryAfterError,
 			resp:                 newResp(""),

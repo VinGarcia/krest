@@ -26,7 +26,8 @@ const (
 	RetryAfterHonor RetryAfterAction = iota
 
 	// RetryAfterError stops retrying and returns the response as the final one
-	// whenever a retryable response carries a `Retry-After` header.
+	// whenever a retryable response carries a parseable `Retry-After` header; a
+	// malformed value is treated as absent and falls back to the backoff.
 	RetryAfterError
 
 	// RetryAfterIgnore ignores the `Retry-After` header entirely and falls back
