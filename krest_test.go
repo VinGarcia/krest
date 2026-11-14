@@ -518,6 +518,157 @@ func TestRequestRetry(t *testing.T) {
 	}
 }
 
+// stubResponse describes one canned HTTP response returned by the test server.
+type stubResponse struct {
+	status     int
+	retryAfter string // Retry-After header value; empty means no header
+}
+
+func TestRequestRetryAfter(t *testing.T) {
+	// Remove backoff randomness so the elapsed-time assertions are stable.
+	randMillis = func() time.Duration {
+		return 0
+	}
+	defer func() {
+		randMillis = DefaultRandMillis
+	}()
+
+	// An HTTP-date already in the past exercises the HTTP-date format end-to-end
+	// while clamping to a zero wait, keeping the test fast.
+	pastDate := time.Now().Add(-1 * time.Hour).UTC().Format(http.TimeFormat)
+
+	tests := []struct {
+		desc       string
+		action     RetryAfterAction
+		responses  []stubResponse
+		baseDelay  time.Duration
+		maxDelay   time.Duration
+		ctxTimeout time.Duration // 0 means no deadline
+
+		expectedCalls  int
+		expectedStatus int
+		expectErr      bool
+		maxElapsed     time.Duration
+	}{
+		{
+			desc:           "honor with a past http-date retries immediately",
+			action:         RetryAfterHonor,
+			responses:      []stubResponse{{status: 503, retryAfter: pastDate}, {status: 200}},
+			maxDelay:       5 * time.Second,
+			expectedCalls:  2,
+			expectedStatus: 200,
+			maxElapsed:     500 * time.Millisecond,
+		},
+		{
+			desc:           "honor returns immediately when the header exceeds the cap",
+			action:         RetryAfterHonor,
+			responses:      []stubResponse{{status: 429, retryAfter: "10"}, {status: 200}},
+			maxDelay:       1 * time.Second,
+			expectedCalls:  1,
+			expectedStatus: 429,
+			expectErr:      true,
+			maxElapsed:     500 * time.Millisecond,
+		},
+		{
+			desc:           "error mode returns the response without retrying",
+			action:         RetryAfterError,
+			responses:      []stubResponse{{status: 429, retryAfter: "5"}, {status: 200}},
+			maxDelay:       5 * time.Second,
+			expectedCalls:  1,
+			expectedStatus: 429,
+			expectErr:      true,
+			maxElapsed:     500 * time.Millisecond,
+		},
+		{
+			desc:           "ignore mode uses normal backoff despite the header",
+			action:         RetryAfterIgnore,
+			responses:      []stubResponse{{status: 429, retryAfter: "10"}, {status: 200}},
+			baseDelay:      1 * time.Millisecond,
+			maxDelay:       1 * time.Millisecond,
+			expectedCalls:  2,
+			expectedStatus: 200,
+			maxElapsed:     500 * time.Millisecond,
+		},
+		{
+			desc:           "honor with a missing header uses normal backoff",
+			action:         RetryAfterHonor,
+			responses:      []stubResponse{{status: 429}, {status: 200}},
+			baseDelay:      1 * time.Millisecond,
+			maxDelay:       1 * time.Millisecond,
+			expectedCalls:  2,
+			expectedStatus: 200,
+			maxElapsed:     500 * time.Millisecond,
+		},
+		{
+			desc:           "honor with a malformed header uses normal backoff",
+			action:         RetryAfterHonor,
+			responses:      []stubResponse{{status: 429, retryAfter: "not-a-date"}, {status: 200}},
+			baseDelay:      1 * time.Millisecond,
+			maxDelay:       1 * time.Millisecond,
+			expectedCalls:  2,
+			expectedStatus: 200,
+			maxElapsed:     500 * time.Millisecond,
+		},
+		{
+			desc:           "honor is bounded by a shorter context deadline",
+			action:         RetryAfterHonor,
+			responses:      []stubResponse{{status: 429, retryAfter: "1"}, {status: 200}},
+			maxDelay:       5 * time.Second,
+			ctxTimeout:     40 * time.Millisecond,
+			expectedCalls:  1,
+			expectedStatus: 429,
+			expectErr:      true,
+			maxElapsed:     500 * time.Millisecond,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			responses := test.responses
+			calls := 0
+			svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				resp := responses[0]
+				responses = responses[1:]
+				if resp.retryAfter != "" {
+					w.Header().Set("Retry-After", resp.retryAfter)
+				}
+				w.WriteHeader(resp.status)
+				_, _ = fmt.Fprint(w, "body")
+			}))
+			defer svr.Close()
+
+			ctx := context.Background()
+			if test.ctxTimeout > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, test.ctxTimeout)
+				defer cancel()
+			}
+
+			client := New(5 * time.Second)
+			start := time.Now()
+			resp, err := client.Get(ctx, svr.URL, RequestData{
+				MaxRetries:       2,
+				BaseRetryDelay:   test.baseDelay,
+				MaxRetryDelay:    test.maxDelay,
+				RetryAfterAction: test.action,
+			})
+			elapsed := time.Since(start)
+
+			tt.AssertEqual(t, calls, test.expectedCalls)
+			tt.AssertEqual(t, resp.StatusCode, test.expectedStatus)
+			if test.expectErr {
+				tt.AssertErrContains(t, err, "unexpected status code")
+			} else {
+				tt.AssertNoErr(t, err)
+			}
+
+			tt.AssertTrue(t, elapsed <= test.maxElapsed,
+				fmt.Sprintf("expected at most %v elapsed, got %v", test.maxElapsed, elapsed))
+		})
+	}
+}
+
 func TestTransportCache(t *testing.T) {
 	t.Run("should reuse transport for nil TLSConfig", func(t *testing.T) {
 		cache := &transportCache{

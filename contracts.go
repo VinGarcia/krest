@@ -41,6 +41,11 @@ type RequestData struct {
 	BaseRetryDelay time.Duration
 	MaxRetryDelay  time.Duration
 
+	// RetryAfterAction controls how a `Retry-After` header on a retryable
+	// response is handled. The zero value honors the header, so leaving it
+	// unset keeps the RFC-compliant default (see RetryAfterAction).
+	RetryAfterAction RetryAfterAction
+
 	// Set this attribute if you want to personalize the retry behavior
 	// if nil it defaults to `rest.DefaultRetryRule()`
 	RetryRule func(resp *http.Response, err error) bool

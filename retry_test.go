@@ -2,6 +2,7 @@ package krest
 
 import (
 	"context"
+	"net/http"
 	"testing"
 	"time"
 
@@ -81,6 +82,203 @@ func TestRetry(t *testing.T) {
 		assertApprox(t, tolerance, pauses[1], 10*time.Millisecond)
 		assertApprox(t, tolerance, pauses[2], 20*time.Millisecond)
 		assertApprox(t, tolerance, pauses[3], 24*time.Millisecond)
+	})
+}
+
+func TestParseRetryAfter(t *testing.T) {
+	// A fixed reference instant keeps the HTTP-date math deterministic.
+	now := time.Date(2026, time.October, 21, 7, 28, 0, 0, time.UTC)
+
+	tests := []struct {
+		desc          string
+		value         string
+		expectedDelay time.Duration
+		expectedOK    bool
+	}{
+		{
+			desc:          "delta-seconds",
+			value:         "120",
+			expectedDelay: 120 * time.Second,
+			expectedOK:    true,
+		},
+		{
+			desc:          "delta-seconds with surrounding spaces",
+			value:         "  30  ",
+			expectedDelay: 30 * time.Second,
+			expectedOK:    true,
+		},
+		{
+			desc:          "delta-seconds zero",
+			value:         "0",
+			expectedDelay: 0,
+			expectedOK:    true,
+		},
+		{
+			desc:          "negative delta-seconds is clamped to zero",
+			value:         "-5",
+			expectedDelay: 0,
+			expectedOK:    true,
+		},
+		{
+			desc:          "http-date in the future",
+			value:         "Wed, 21 Oct 2026 07:30:00 GMT",
+			expectedDelay: 2 * time.Minute,
+			expectedOK:    true,
+		},
+		{
+			desc:          "http-date in the past is clamped to zero",
+			value:         "Wed, 21 Oct 2026 07:00:00 GMT",
+			expectedDelay: 0,
+			expectedOK:    true,
+		},
+		{
+			desc:       "empty header is treated as absent",
+			value:      "",
+			expectedOK: false,
+		},
+		{
+			desc:       "malformed header is treated as absent",
+			value:      "not-a-real-date",
+			expectedOK: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			delay, ok := parseRetryAfter(test.value, now)
+			assert.Equal(t, ok, test.expectedOK)
+			if test.expectedOK {
+				assert.Equal(t, delay, test.expectedDelay)
+			}
+		})
+	}
+}
+
+func TestApplyRetryAfter(t *testing.T) {
+	now := time.Date(2026, time.October, 21, 7, 28, 0, 0, time.UTC)
+	maxDelay := 10 * time.Second
+
+	newResp := func(header string) *http.Response {
+		h := http.Header{}
+		if header != "" {
+			h.Set("Retry-After", header)
+		}
+		return &http.Response{Header: h}
+	}
+
+	tests := []struct {
+		desc                 string
+		action               RetryAfterAction
+		resp                 *http.Response
+		expectedKeepRetrying bool
+		expectedOverride     time.Duration
+	}{
+		{
+			desc:                 "honor within cap uses the header delay as override",
+			action:               RetryAfterHonor,
+			resp:                 newResp("5"),
+			expectedKeepRetrying: true,
+			expectedOverride:     5 * time.Second,
+		},
+		{
+			desc:                 "honor above cap returns the response as final",
+			action:               RetryAfterHonor,
+			resp:                 newResp("30"),
+			expectedKeepRetrying: false,
+			expectedOverride:     -1,
+		},
+		{
+			desc:                 "honor with no header falls back to backoff",
+			action:               RetryAfterHonor,
+			resp:                 newResp(""),
+			expectedKeepRetrying: true,
+			expectedOverride:     -1,
+		},
+		{
+			desc:                 "honor with malformed header falls back to backoff",
+			action:               RetryAfterHonor,
+			resp:                 newResp("garbage"),
+			expectedKeepRetrying: true,
+			expectedOverride:     -1,
+		},
+		{
+			desc:                 "error mode returns the response as final when header present",
+			action:               RetryAfterError,
+			resp:                 newResp("5"),
+			expectedKeepRetrying: false,
+			expectedOverride:     -1,
+		},
+		{
+			desc:                 "error mode falls back to backoff when header is malformed",
+			action:               RetryAfterError,
+			resp:                 newResp("garbage"),
+			expectedKeepRetrying: true,
+			expectedOverride:     -1,
+		},
+		{
+			desc:                 "error mode falls back to backoff when header absent",
+			action:               RetryAfterError,
+			resp:                 newResp(""),
+			expectedKeepRetrying: true,
+			expectedOverride:     -1,
+		},
+		{
+			desc:                 "ignore mode always falls back to backoff",
+			action:               RetryAfterIgnore,
+			resp:                 newResp("5"),
+			expectedKeepRetrying: true,
+			expectedOverride:     -1,
+		},
+		{
+			desc:                 "nil response falls back to backoff",
+			action:               RetryAfterHonor,
+			resp:                 nil,
+			expectedKeepRetrying: true,
+			expectedOverride:     -1,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			keepRetrying, override := applyRetryAfter(test.action, maxDelay, test.resp, now)
+			assert.Equal(t, keepRetrying, test.expectedKeepRetrying)
+			assert.Equal(t, override, test.expectedOverride)
+		})
+	}
+}
+
+// TestRetryWithBackoffOverrideDelay verifies that a non-negative override delay
+// replaces the exponential backoff for the next sleep.
+func TestRetryWithBackoffOverrideDelay(t *testing.T) {
+	randMillis = func() time.Duration {
+		return 0
+	}
+	defer func() {
+		randMillis = DefaultRandMillis
+	}()
+
+	t.Run("override delay replaces the exponential backoff", func(t *testing.T) {
+		startTime := time.Now()
+		calls := 0
+		// baseDelay/maxDelay are huge so that, if the override were ignored, the
+		// test would clearly overshoot the expected ~30ms.
+		retryWithBackoff(context.TODO(), 1*time.Second, 1*time.Second, 2, func() (bool, time.Duration) {
+			calls++
+			return true, 30 * time.Millisecond
+		})
+
+		assert.Equal(t, calls, 2)
+		assertApprox(t, 20*time.Millisecond, time.Since(startTime), 30*time.Millisecond)
+	})
+
+	t.Run("negative override keeps the exponential backoff", func(t *testing.T) {
+		startTime := time.Now()
+		// Only the single gap between the two attempts (baseDelay = 10ms) is waited.
+		retryWithBackoff(context.TODO(), 10*time.Millisecond, 1*time.Second, 2, func() (bool, time.Duration) {
+			return true, -1
+		})
+
+		assertApprox(t, 15*time.Millisecond, time.Since(startTime), 10*time.Millisecond)
 	})
 }
 
